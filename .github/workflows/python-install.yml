@@ -22,8 +22,8 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install .
+          pip install -r requirements.txt
 
-      - name: Verify install works
+      - name: Verify environment
         run: |
-          python -c "print('phasamp installed and test ran')"
+          python -c "import numpy; import matplotlib; import scipy; print('Dependencies OK')"
