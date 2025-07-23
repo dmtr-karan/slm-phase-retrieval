@@ -1,6 +1,6 @@
 # slm-phase-retrieval: Phase & Amplitude Retrieval for SLM Correction
 
-![CI](https://github.com/dmtr-karan/slm-phase-retrieval/actions/workflows/python-install.yml/badge.svg)
+![CI](https://github.com/dmtr-karan/slm-phase-retrieval/.github/workflows/python-install.yml/badge.svg)
 
 This repository implements a complete phase and amplitude correction pipeline for Spatial Light Modulators (SLMs), including device control, phase measurement, fringe analysis, and phase correction.
 
