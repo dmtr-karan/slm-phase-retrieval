@@ -1,16 +1,25 @@
-import time
-from orca.orca_autonoma import LiveHamamatsu
+"""
+Benchmark test: compare camera acquisition time in streaming (live) vs triggered (single-shot) mode.
+"""
 
-def main():
-    cam = LiveHamamatsu(initCam=True, came_numb=0, trig_mODe=1, exposure=0.05)
-    cam.num = 1
-    cam.prep_acq()
+from orca.orca_camera import LiveHamamatsu
+import time
+
+
+def test_camera_acquisition_time(live_mode=True, num_frames=5):
+    cam = LiveHamamatsu()
+    cam.initialize(live_mode=live_mode)
+
+    print(f"Testing camera mode: {'Live streaming' if live_mode else 'Single shot'}")
 
     start = time.time()
-    cam.take_image()
-    end = time.time()
+    for _ in range(num_frames):
+        cam.capture_frame()
+    duration = time.time() - start
 
-    print("Time for one image acquisition: {:.3f} s".format(end - start))
+    print(f"→ Acquired {num_frames} frames in {duration:.3f} seconds")
+
 
 if __name__ == "__main__":
-    main()
+    test_camera_acquisition_time(live_mode=True)
+    test_camera_acquisition_time(live_mode=False)

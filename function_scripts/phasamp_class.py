@@ -1,64 +1,212 @@
-import numpy as np
+"""
+phasamp_class.py
+
+Phase and amplitude retrieval class adapted from:
+- Phillip Zupancic (https://doi.org/10.1364/OE.24.013881)
+- Schroff et al., Scientific Reports (https://doi.org/10.1038/s41598-023-30296-6)
+- Refactored for LCOS-SLM calibration with custom camera and shutter integration.
+
+Author: Dimitrios Karanikolopoulos
+"""
+
 import os
-import glob
-from PIL import Image
-from .helpers import normalize, mod_1
+import time
+import copy
+import numpy as np
+import matplotlib.pyplot as plt
+import function_scripts.patterns as pt
+import function_scripts.fitting as ft
+from function_scripts.helpers import meshgrid_slm, closest_arr
+from slm.phase_generator import phagen as phuzgen
+
 
 class PhaseAmplitudeRetriever:
-    """Core class for SLM phase and amplitude retrieval."""
+    """
+    The main class for retrieving the phase and intensity profile of the SLM wavefront.
+    """
 
-    def __init__(self, slm, camera, shutter, mod_depth=198):
-        """
-        Parameters:
-            slm: SlmDisplay instance
-            camera: Camera instance
-            shutter: Shutter instance
-            mod_depth: Modulation depth (0-255) for given wavelength
-        """
-        self.slm = slm
-        self.camera = camera
-        self.shutter = shutter
-        self.mod_depth = mod_depth
-        self.correction_phase = None
-        self.final_phase_mask = None
+    def __init__(self, data_path, wavelength=752e-9):
+        self.data_path = data_path
+        self.wavelength = wavelength
+        self.k = 2 * np.pi / self.wavelength
+        self.the_path = data_path
+        self.use_prev_dphi = False
+        self.bckgrnd_full = None
 
-    def load_correction_pattern(self, filename=None):
+    def measure_slm_wavefront(
+        self,
+        slm_disp_obj,
+        cam_obj,
+        shutter_obj,
+        aperture_number=20,
+        aperture_width=64,
+        exposure_time=310 / 1000,
+        num_frames=10,
+        roi_min_x=4,
+        roi_min_y=4,
+        roi_n=12,
+        plot_within=False,
+        sv_data=False,
+        rm_fringes=True,
+        use_correction=False,
+    ):
         """
-        Loads a correction BMP pattern from the slm/corr_patties/ folder.
-        Normalizes it and stores it internally.
+        Main function to retrieve the SLM wavefront by projecting small aperture gratings
+        and fitting the resulting interferograms.
+
+        Saves:
+            dphi: retrieved relative phase
+            dphi_err: error from sine fitting
+            i_fit: intensity from amplitude product of fits
         """
-        current_path = os.getcwd()
-        if "tests" in current_path:
-            current_path = current_path.replace("\\tests", "")
-        if filename is None:
-            pattern_path = glob.glob(current_path + r"\\slm\\corr_patties\\CAL_LSH0803420_750nm.bmp")
+
+        self.use_prev_dphi = use_correction
+        timestamp = time.strftime("%y-%m-%d_%H-%M-%S", time.localtime())
+        save_dir = os.path.join(self.data_path, f"{timestamp}_wavefront")
+        os.makedirs(save_dir)
+
+        # Setup
+        res_y, res_x = slm_disp_obj.res
+        npix = min(res_y, res_x)
+        slm_pitch = slm_disp_obj.pitch
+        k = self.k
+        fl = 0.3  # Focal length (m)
+
+        # Create phase mask for measurement
+        phuzgen.grating_as_usual = True
+        phuzgen.correction_path = self.the_path
+        phuzgen.whichphuzzez = {
+            "grating": True,
+            "patch": False,
+            "corr_patt": True,
+            "corr_phase": use_correction,
+        }
+        phuzgen.linear_grating()
+        phuzgen.make_full_slm_array()
+        slm_phase = phuzgen.final_phuz
+
+        # Get aperture coordinates
+        slm_idx = self._get_aperture_indices(
+            aperture_number, aperture_number, 0, npix, 0, npix, aperture_width, aperture_width
+        )
+        roi_idxs = np.reshape(np.arange(aperture_number**2), (aperture_number, aperture_number))
+        roi_idxs = roi_idxs[roi_min_x : roi_min_x + roi_n, roi_min_y : roi_min_y + roi_n].flatten()
+        n_centre = aperture_number**2 // 2 + aperture_number // 2 - 1
+
+        # Capture background image
+        print("Recording background...")
+        if rm_fringes:
+            phuzgen.whichphuzzez = {
+                "grating": False,
+                "patch": False,
+                "corr_patt": True,
+                "corr_phase": use_correction,
+            }
+            phuzgen.make_full_slm_array()
+            slm_disp_obj.load_phase(phuzgen.final_phuz)
+            shutter_obj.shutter_enable()
         else:
-            pattern_path = [filename]
+            shutter_obj.shutter_enable(False)
 
-        if not pattern_path or not os.path.exists(pattern_path[0]):
-            print("Correction pattern BMP does not exist.")
-            return
+        cam_obj.exposure = exposure_time
+        cam_obj.num = num_frames
+        cam_obj.prep_acq()
+        cam_obj.take_average_image(num_frames)
+        bckgr = copy.deepcopy(cam_obj.last_frame)
 
-        print("Loading correction pattern from:\n{}".format(pattern_path[0]))
-        with Image.open(pattern_path[0]) as img:
-            image = np.asarray(img, dtype=np.uint16)
-        self.correction_phase = normalize(image)
+        # Activate shutter
+        shutter_obj.shutter_enable(True)
 
-    def upload_test_grating_with_correction(self, frequency_px=40):
+        # Initialize image stack
+        img_stack = np.zeros((300, 300, roi_n**2))
+        ph_central = np.zeros((res_y, res_x))
+        ph_central[slm_idx[0][n_centre]:slm_idx[1][n_centre],
+                   slm_idx[2][n_centre]:slm_idx[3][n_centre]] = \
+            slm_phase[slm_idx[0][n_centre]:slm_idx[1][n_centre],
+                      slm_idx[2][n_centre]:slm_idx[3][n_centre]]
+
+        # Loop over apertures
+        print("Starting measurement loop...")
+        for i, idx in enumerate(roi_idxs):
+            masked_phase = np.copy(ph_central)
+            masked_phase[slm_idx[0][idx]:slm_idx[1][idx],
+                         slm_idx[2][idx]:slm_idx[3][idx]] = \
+                slm_phase[slm_idx[0][idx]:slm_idx[1][idx],
+                          slm_idx[2][idx]:slm_idx[3][idx]]
+
+            phuzgen.patch = masked_phase
+            phuzgen.make_full_slm_array()
+            slm_disp_obj.load_phase(phuzgen.final_phuz)
+
+            cam_obj.take_average_image(num_frames)
+            img_stack[..., i] = cam_obj.last_frame - bckgr
+
+            if plot_within:
+                plt.imshow(img_stack[..., i], cmap='inferno')
+                plt.title(f"Patch {i}")
+                plt.colorbar()
+                plt.pause(0.3)
+                plt.clf()
+
+        # Fit retrieved phase
+        print("Fitting phase data...")
+        fit_sine = ft.FitSine(fl, k)
+        popt_sv = []
+        perr_sv = []
+
+        x, y = pt.make_grid(img_stack[..., 0], scale=cam_obj.pitch)
+        x_data = np.vstack((x.ravel(), y.ravel()))
+
+        for i, idx in enumerate(roi_idxs):
+            dx = (slm_idx[2][idx] - slm_idx[2][n_centre]) * slm_pitch
+            dy = (slm_idx[0][idx] - slm_idx[0][n_centre]) * slm_pitch
+            fit_sine.set_dx_dy(dx, dy)
+
+            a_guess = np.sqrt(np.max(img_stack[..., i])) / 2
+            p0 = [0, a_guess, a_guess]
+            bounds = ([-np.pi, 0, 0], [np.pi, 2 * a_guess, 2 * a_guess])
+            popt, _ = ft.safe_fit(fit_sine.fit_sine, x_data, img_stack[..., i].ravel(), p0, bounds)
+            popt_sv.append(popt)
+
+        popt_sv = np.array(popt_sv)
+        dphi = -popt_sv[:, 0].reshape(roi_n, roi_n)
+        amp = np.abs(popt_sv[:, 1] * popt_sv[:, 2]).reshape(roi_n, roi_n)
+
+        # Save
+        np.save(os.path.join(save_dir, "dphi.npy"), dphi)
+        np.save(os.path.join(save_dir, "amplitude.npy"), amp)
+
+        plt.imshow(dphi, cmap='magma')
+        plt.title("Retrieved Phase Map")
+        plt.colorbar()
+        plt.savefig(os.path.join(save_dir, "phase_map.png"))
+        plt.close()
+
+        plt.imshow(amp, cmap='inferno')
+        plt.title("Retrieved Intensity (a*b)")
+        plt.colorbar()
+        plt.savefig(os.path.join(save_dir, "intensity_map.png"))
+        plt.close()
+
+    def _get_aperture_indices(self, n_ap_x, n_ap_y, x_min, x_max, y_min, y_max, dx, dy):
         """
-        Builds a horizontal grating and adds correction phase.
-        Uploads it to the SLM after proper normalization.
+        Computes ROI pixel bounds for a grid of patches.
         """
-        if self.correction_phase is None:
-            raise ValueError("Correction pattern not loaded. Call load_correction_pattern() first.")
+        patch_start_x = [int(x_min + i * dx) for i in range(n_ap_x)]
+        patch_end_x = [x + dx for x in patch_start_x]
+        patch_start_y = [int(y_min + i * dy) for i in range(n_ap_y)]
+        patch_end_y = [y + dy for y in patch_start_y]
 
-        y, x = np.indices((self.slm.slmY, self.slm.slmX))
-        grating = np.mod(x, frequency_px) / frequency_px
-        grating = normalize(grating)
+        patch_top = []
+        patch_bot = []
+        patch_left = []
+        patch_right = []
 
-        combo_phase = mod_1(grating + self.correction_phase) * self.mod_depth
-        self.final_phase_mask = combo_phase.astype('uint8')
+        for i in patch_start_y:
+            for j in patch_start_x:
+                patch_top.append(i)
+                patch_bot.append(i + dy)
+                patch_left.append(j)
+                patch_right.append(j + dx)
 
-        self.slm.load_phase(self.final_phase_mask)
-        print("Test grating with correction uploaded.")
-
+        return patch_top, patch_bot, patch_left, patch_right
