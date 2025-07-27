@@ -1,7 +1,7 @@
 import os
 import numpy as np
-from slm.slm_hamamatsu import SlmDisplay
-from helpers import mod_1, normalize
+from slm.slm_hamamatsu import SlmHamamatsu
+from function_scripts.helpers import mod_1, normalize
 from PIL import Image
 import glob
 
@@ -26,7 +26,7 @@ def generate_horizontal_grating(shape: tuple[int, int], period_px: int = 30) -> 
 
 
 def main():
-    slm = SlmDisplay()
+    slm = SlmHamamatsu()
     slm.connect()
 
     # Load correction pattern from BMP

@@ -1,3 +1,5 @@
+# slm/slm_hamamatsu.py
+
 import os
 import time
 import glob
@@ -6,7 +8,6 @@ from PIL import Image
 from cffi import FFI
 
 from function_scripts.helpers import mod_1, normalize
-
 
 __author__ = "Dimitrios Karanikolopoulos"
 __coauthor__ = "John Balas (International Center of Polaritonics, Westlake University, Hangzhou)"
@@ -32,7 +33,7 @@ class SlmHamamatsu:
         self.mod_depth = 198  # Value for 752 nm per manufacturer spec
 
         # Final phase image (uint8)
-        self.final_phuz = np.zeros((self.slmY, self.slmX), dtype=np.uint8)
+        self.final_phase = np.zeros((self.slmY, self.slmX), dtype=np.uint8)
 
         # SLM driver
         self.ffi = FFI()
@@ -131,7 +132,7 @@ class SlmHamamatsu:
         current_path = os.getcwd()
         if "tests" in current_path:
             current_path = current_path.replace("\\tests", "")
-        search_path = os.path.join(current_path, "slm", "corr_patties", "CAL_LSH0803420_750nm.bmp")
+        search_path = os.path.join(current_path, "slm", "correction_patterns", "CAL_LSH0803420_750nm.bmp")
         bmp_files = glob.glob(search_path)
 
         if not bmp_files:
@@ -149,8 +150,8 @@ class SlmHamamatsu:
         grating = self.generate_horizontal_grating()
         correction = self.load_correction_pattern()
         phased = mod_1(grating + correction) * self.mod_depth
-        self.final_phuz = phased.astype(np.uint8)
-        self.load_phase(self.final_phuz)
+        self.final_phase = phased.astype(np.uint8)
+        self.load_phase(self.final_phase)
 
     @property
     def meshgrid_slm(self):

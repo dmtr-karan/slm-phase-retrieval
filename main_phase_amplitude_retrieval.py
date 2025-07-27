@@ -3,7 +3,6 @@ Main script for phase and amplitude retrieval using fringe interferometry
 to calibrate a Hamamatsu LCOS-SLM. Requires a camera, shutter, and SLM driver.
 
 Author: Dimitrios Karanikolopoulos
-Co-author: John Balas (International Center of Polaritonics, Westlake University, Hangzhou)
 """
 
 from function_scripts.slmphase import PhaseAmplitudeRetrieval
