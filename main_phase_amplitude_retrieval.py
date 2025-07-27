@@ -6,7 +6,7 @@ Author: Dimitrios Karanikolopoulos
 Co-author: John Balas (International Center of Polaritonics, Westlake University, Hangzhou)
 """
 
-from function_scripts.phasamp_class import PhaseAmplitudeRetrieval
+from function_scripts.slmphase import PhaseAmplitudeRetrieval
 from orca.orca_camera import LiveHamamatsu
 from slm.slm_hamamatsu import SlmHamamatsu
 from peripheral_instruments.thorlabs_shutter import Shutter

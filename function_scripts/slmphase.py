@@ -1,6 +1,4 @@
 """
-phasamp_class.py
-
 Phase and amplitude retrieval class adapted from:
 - Phillip Zupancic (https://doi.org/10.1364/OE.24.013881)
 - Schroff et al., Scientific Reports (https://doi.org/10.1038/s41598-023-30296-6)
@@ -14,10 +12,30 @@ import time
 import copy
 import numpy as np
 import matplotlib.pyplot as plt
-import function_scripts.patterns as pt
+
 import function_scripts.fitting as ft
-from function_scripts.helpers import meshgrid_slm, closest_arr
-from slm.phase_generator import phagen as phuzgen
+from function_scripts.helpers import meshgrid_slm, closest_arr, make_grid
+
+# Dummy phase generator placeholder (used until full logic is ported)
+class DummyPhasor:
+    """
+    Stub class to emulate phase generation logic.
+    To be replaced with complete routines from slm_hamamatsu.py.
+    """
+    def __init__(self):
+        self.patch = None
+        self.final_phase = None
+        self.correction_path = None
+        self.which_phases = {}
+
+    def linear_grating(self):
+        pass
+
+    def make_full_slm_array(self):
+        self.final_phase = np.zeros((1024, 1272), dtype=np.uint8)
+
+
+phase_gen = DummyPhasor()
 
 
 class PhaseAmplitudeRetriever:
@@ -73,17 +91,16 @@ class PhaseAmplitudeRetriever:
         fl = 0.3  # Focal length (m)
 
         # Create phase mask for measurement
-        phuzgen.grating_as_usual = True
-        phuzgen.correction_path = self.the_path
-        phuzgen.whichphuzzez = {
+        phase_gen.correction_path = self.the_path
+        phase_gen.which_phases = {
             "grating": True,
             "patch": False,
             "corr_patt": True,
             "corr_phase": use_correction,
         }
-        phuzgen.linear_grating()
-        phuzgen.make_full_slm_array()
-        slm_phase = phuzgen.final_phuz
+        phase_gen.linear_grating()
+        phase_gen.make_full_slm_array()
+        slm_phase = phase_gen.final_phase
 
         # Get aperture coordinates
         slm_idx = self._get_aperture_indices(
@@ -96,14 +113,14 @@ class PhaseAmplitudeRetriever:
         # Capture background image
         print("Recording background...")
         if rm_fringes:
-            phuzgen.whichphuzzez = {
+            phase_gen.which_phases = {
                 "grating": False,
                 "patch": False,
                 "corr_patt": True,
                 "corr_phase": use_correction,
             }
-            phuzgen.make_full_slm_array()
-            slm_disp_obj.load_phase(phuzgen.final_phuz)
+            phase_gen.make_full_slm_array()
+            slm_disp_obj.load_phase(phase_gen.final_phase)
             shutter_obj.shutter_enable()
         else:
             shutter_obj.shutter_enable(False)
@@ -132,11 +149,11 @@ class PhaseAmplitudeRetriever:
             masked_phase[slm_idx[0][idx]:slm_idx[1][idx],
                          slm_idx[2][idx]:slm_idx[3][idx]] = \
                 slm_phase[slm_idx[0][idx]:slm_idx[1][idx],
-                          slm_idx[2][idx]:slm_idx[3][idx]]
+                          slm_idx[2][idx]:slm_phase[3][idx]]
 
-            phuzgen.patch = masked_phase
-            phuzgen.make_full_slm_array()
-            slm_disp_obj.load_phase(phuzgen.final_phuz)
+            phase_gen.patch = masked_phase
+            phase_gen.make_full_slm_array()
+            slm_disp_obj.load_phase(phase_gen.final_phase)
 
             cam_obj.take_average_image(num_frames)
             img_stack[..., i] = cam_obj.last_frame - bckgr
@@ -152,9 +169,8 @@ class PhaseAmplitudeRetriever:
         print("Fitting phase data...")
         fit_sine = ft.FitSine(fl, k)
         popt_sv = []
-        perr_sv = []
 
-        x, y = pt.make_grid(img_stack[..., 0], scale=cam_obj.pitch)
+        x, y = make_grid(img_stack[..., 0], scale=cam_obj.pitch)
         x_data = np.vstack((x.ravel(), y.ravel()))
 
         for i, idx in enumerate(roi_idxs):
@@ -172,7 +188,7 @@ class PhaseAmplitudeRetriever:
         dphi = -popt_sv[:, 0].reshape(roi_n, roi_n)
         amp = np.abs(popt_sv[:, 1] * popt_sv[:, 2]).reshape(roi_n, roi_n)
 
-        # Save
+        # Save results
         np.save(os.path.join(save_dir, "dphi.npy"), dphi)
         np.save(os.path.join(save_dir, "amplitude.npy"), amp)
 
