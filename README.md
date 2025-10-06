@@ -102,11 +102,9 @@ Backgrounds are measured and removed either by shutter or by using a flat-phase 
 
 **What you’re seeing**
 
-- **Top row:** Uncorrected → Corrected **intensity** (labels flush-left; teal underline).
-- **Bottom row:** **Target** → **Retrieved** → **Combined** **phase** (labels flush-left; purple underline).
-- Styling matches our shared theme: dark `#111111`, accents `#00FF99` / `#BB33FF`.
-
-> Widescreen asset for social sharing: `assets/phase_collage_wide.png`.
+- **Top row:** Uncorrected → Corrected **intensity**.
+- **Bottom row:** **Target** → **Retrieved** → **Combined** **phase**.
+- Labels are flush-left; **teal** underlines for intensity, **purple** underlines for phase.
 
 ---
 
@@ -116,7 +114,6 @@ Planned improvements include:
 
 - Adding Python type annotations across the codebase
 - Inlining phase generation logic into `slmphase.py`
-- Including real LG donut test result in `tests/`
 - Replacing placeholder phase_gen logic with full pattern generation code
 - Adding unit tests and live examples
 - Optional PyQt GUI interface (SLM/Camera control)
