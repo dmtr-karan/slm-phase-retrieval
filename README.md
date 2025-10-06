@@ -24,34 +24,34 @@ This version is fully adapted to a USB-connected LCOS SLM (Hamamatsu X15213) and
 
 ```
 slm-phase-retrieval/
-├── main_phase_amplitude_retrieval.py        # Top-level phase retrieval routine
-
-├── slm/
-│   ├── slm_hamamatsu.py                     # Hamamatsu SLM USB control (X15213 LCOS)
-│   ├── demo_slm_upload_grating_and_correction.py  # Phase upload demonstration
-│   └── corr_patties/
-│       └── CAL_LSH0803420_750nm.bmp         # Manufacturer correction pattern
-
-├── orca/
-│   └── orca_camera.py                       # ORCA Flash v3 USB interface
-
-├── peripheral_instruments/
-│   └── thorlabs_shutter.py                  # USB control for SC10 shutter
-
+├── .github/
+│   └── workflows/
+│       └── python-install.yml                 # CI workflow (drives the README badge)
+├── assets/
+│   ├── phase_collage_square.png               # 1000×1000 labeled composite (README “Results”)
+│   └── phase_collage_wide.png                 # 1280×720 labeled composite (social preview/LinkedIn)
 ├── function_scripts/
-│   ├── slmphase.py                          # Main retrieval class
-│   ├── phase_gen.py                         # Phase pattern generation (gratings, corrections)
-│   ├── fitting.py                           # Sine and Gaussian fitting routines
-│   └── helpers.py                           # Normalization, meshgrid, utilities
-
+│   ├── fitting.py                             # Sine and Gaussian fitting routines
+│   ├── helpers.py                             # Normalization, meshgrid, utilities
+│   ├── phase_gen.py                           # Phase pattern generation (gratings, corrections)
+│   └── slmphase.py                            # Main retrieval class
+├── orca/
+│   └── orca_camera.py                         # ORCA Flash v3 USB interface
+├── peripheral_instruments/
+│   └── thorlabs_shutter.py                    # USB control for SC10 shutter
+├── slm/
+│   ├── corr_patties/
+│   │   └── CAL_LSH0803420_750nm.bmp           # Manufacturer correction pattern
+│   ├── demo_slm_upload_grating_and_correction.py  # Phase upload demonstration
+│   └── slm_hamamatsu.py                       # Hamamatsu SLM USB control (X15213 LCOS)
 ├── tests/
-│   ├── test_correction_by_lg.py             # Example LG-beam result viewer
-│   ├── slm_speed_test.py                    # SLM phase upload benchmark
-│   └── orca_speed_test_vs_cam_PrepMode.py   # Acquisition speed test
-
-├── requirements.txt
-├── LICENSE
-└── README.md
+│   ├── orca_speed_test_vs_cam_PrepMode.py     # Acquisition speed test
+│   ├── slm_speed_test.py                      # SLM phase upload benchmark
+│   └── test_correction_by_lg.py               # Example LG-beam result viewer
+├── LICENSE                                    # Project license
+├── README.md                                  # Project overview & docs
+├── main_phase_amplitude_retrieval.py          # Top-level phase retrieval routine
+└── requirements.txt                           # Python dependencies
 ```
 
 
@@ -88,6 +88,24 @@ The core functionality is implemented in `function_scripts/slmphase.py` and:
 5. Stores correction maps and Gaussian fits
 
 Backgrounds are measured and removed either by shutter or by using a flat-phase mask with suppressed diffraction.
+
+---
+
+## Results
+
+<p align="center">
+  <img src="assets/phase_collage_square.png"
+       alt="SLM phase correction — top: uncorrected vs corrected intensity; bottom: target, retrieved, combined phase (LG₀¹)."
+       width="720">
+</p>
+
+**What you’re seeing**
+
+- **Top row:** Uncorrected → Corrected **intensity** (labels flush-left; teal underline).
+- **Bottom row:** **Target** → **Retrieved** → **Combined** **phase** (labels flush-left; purple underline).
+- Styling matches our shared theme: dark `#111111`, accents `#00FF99` / `#BB33FF`.
+
+> Widescreen asset for social sharing: `assets/phase_collage_wide.png`.
 
 ---
 
