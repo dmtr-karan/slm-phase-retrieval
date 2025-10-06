@@ -28,8 +28,9 @@ slm-phase-retrieval/
 │   └── workflows/
 │       └── python-install.yml                 # CI workflow (drives the README badge)
 ├── assets/
-│   ├── phase_collage_square.png               # 1000×1000 labeled composite (README “Results”)
-│   └── phase_collage_wide.png                 # 1280×720 labeled composite (social preview/LinkedIn)
+│   ├── phase_collage_square.png              # 1000×1000 (README Results)
+│   ├── phase_collage_wide.png                # 1280×720 (general wide)
+│   └── phase_collage_wide_social.png         # 1280×640 (GitHub social preview)
 ├── function_scripts/
 │   ├── fitting.py                             # Sine and Gaussian fitting routines
 │   ├── helpers.py                             # Normalization, meshgrid, utilities
